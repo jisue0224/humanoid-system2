@@ -1,0 +1,39 @@
+.venv/
+env_isaaclab/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Isaac/Omniverse caches and generated artifacts
+_isaac_sim/
+external/
+kit/
+ov/
+*.usd
+*.usda
+*.usdc
+
+# Experiment outputs
+experiments/logs/
+experiments/plots/
+experiments/videos/
+experiments/checkpoints/
+experiments/images/
+runs/
+wandb/
+tb/
+
+# Large model artifacts
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.mp4
+*.mov
+*.avi
+
+# Secrets
+.env
+*.token

@@ -1,0 +1,7 @@
+# Minimal pinned packages used by scripts/install_isaaclab.sh.
+# The full Isaac Sim dependency tree is resolved by isaaclab[isaacsim,all].
+torch==2.5.1
+torchvision==0.20.1
+isaaclab[isaacsim,all]==2.1.0
+flatdict==4.0.1
+

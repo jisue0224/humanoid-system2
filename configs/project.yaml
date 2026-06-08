@@ -1,0 +1,20 @@
+project:
+  name: humanoid-system2
+  primary_backend: isaaclab
+  fallback_backend: mujoco
+
+isaaclab:
+  task: Isaac-Velocity-Flat-H1-v0
+  train_iterations_if_no_checkpoint: 1000
+  tensorboard_port: 6006
+
+uncertainty:
+  window_steps: 5
+  threshold_percentile: 90
+
+llm:
+  model: gpt-5.4
+  cooldown_steps: 20
+  timeout_seconds: 30
+  fallback: direct_goal_velocity
+
