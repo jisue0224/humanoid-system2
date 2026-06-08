@@ -1,0 +1,33 @@
+{
+  "conditions": {
+    "policy_only": {
+      "success_rate": 0.0,
+      "mean_episode_length": 500.0,
+      "mean_final_distance": 3.085836851596832,
+      "total_llm_calls": 0,
+      "llm_call_rate": 0.0,
+      "llm_errors": 0
+    },
+    "always_llm": {
+      "success_rate": 0.0,
+      "mean_episode_length": 500.0,
+      "mean_final_distance": 2.8290207862854,
+      "total_llm_calls": 500,
+      "llm_call_rate": 0.05,
+      "llm_errors": 0
+    },
+    "uncertainty_switching": {
+      "success_rate": 0.0,
+      "mean_episode_length": 500.0,
+      "mean_final_distance": 3.086865520477295,
+      "total_llm_calls": 175,
+      "llm_call_rate": 0.0175,
+      "llm_errors": 0
+    }
+  },
+  "summary_paths": {
+    "policy_only": "experiments/llm_navigation/policy_only/metrics/policy_only_summary.json",
+    "always_llm": "experiments/llm_navigation/always_llm/metrics/always_llm_summary.json",
+    "uncertainty_switching": "experiments/llm_navigation/uncertainty_switching/metrics/uncertainty_switching_summary.json"
+  }
+}

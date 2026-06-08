@@ -4,4 +4,4 @@ torch==2.5.1
 torchvision==0.20.1
 isaaclab[isaacsim,all]==2.1.0
 flatdict==4.0.1
-
+openai==2.41.0

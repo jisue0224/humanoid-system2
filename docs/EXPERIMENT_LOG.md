@@ -357,3 +357,104 @@ Conclusion:
 
 - Isaac Lab camera path is blocked by rendering/Vulkan in this server session.
 - Matplotlib overhead fallback is working and is ready as the LLM visual input for the next step.
+
+## Step 5 LLM Navigation With Overhead View
+
+Implementation:
+
+- Added `scripts/llm_navigation_h1.py`.
+- Added `scripts/merge_llm_navigation_results.py`.
+- Uses the Step 4 matplotlib overhead view as the LLM image input because Isaac Lab RGB/depth cameras are blocked by Vulkan/graphics initialization on this VESSL container.
+- Uses `OPENAI_API_KEY` from `.env`.
+- Model requested by the experiment: `gpt-5.4`.
+- Trigger threshold: Step 3 combined p90 uncertainty, `0.0247`.
+- LLM intervention cooldown: `20` steps.
+- Maximum episode length: `500` steps.
+- Goal: `(5.0, 0.0)`.
+- Obstacle: center `(2.5, 0.0, 0.5)`, size `(1.0, 1.0, 1.0)`.
+- LLM trigger images are saved under each condition's `llm_images/` directory.
+
+Important implementation note:
+
+- The prompt defines `vy` as left `-1` and right `+1`, and `yaw` as left turn `-1` and right turn `+1`.
+- Isaac Lab H1 velocity commands use positive lateral/yaw values for left/CCW motion.
+- The runner therefore converts LLM commands with:
+  - `vx_isaac = vx_llm`
+  - `vy_isaac = -vy_llm`
+  - `yaw_isaac = -yaw_llm`
+- Earlier pre-fix exploratory runs were discarded and the final results below use the corrected sign convention.
+
+Commands:
+
+```bash
+source env_isaaclab/bin/activate
+
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/llm_navigation_h1.py \
+  --headless --device cuda:0 --condition policy_only \
+  --num_envs 20 --episodes 20 --max_steps 500 \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --output_dir experiments/llm_navigation
+
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/llm_navigation_h1.py \
+  --headless --device cuda:0 --condition always_llm \
+  --num_envs 20 --episodes 20 --max_steps 500 \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --output_dir experiments/llm_navigation
+
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/llm_navigation_h1.py \
+  --headless --device cuda:0 --condition uncertainty_switching \
+  --num_envs 20 --episodes 20 --max_steps 500 \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --output_dir experiments/llm_navigation
+
+python scripts/merge_llm_navigation_results.py \
+  --output_dir experiments/llm_navigation
+```
+
+Results:
+
+- `policy_only`:
+  - Success rate: `0.000`.
+  - Mean episode length: `500.0`.
+  - Mean final distance: `3.086 m`.
+  - LLM calls: `0`.
+- `always_llm`:
+  - Success rate: `0.000`.
+  - Mean episode length: `500.0`.
+  - Mean final distance: `2.829 m`.
+  - LLM calls: `500`.
+  - LLM errors: `0`.
+- `uncertainty_switching`:
+  - Success rate: `0.000`.
+  - Mean episode length: `500.0`.
+  - Mean final distance: `3.087 m`.
+  - LLM calls: `175`.
+  - LLM call rate: `0.0175` calls per environment-step.
+  - LLM errors: `0`.
+
+Artifacts:
+
+- Combined summary JSON: `experiments/llm_navigation/metrics/llm_navigation_summary.json`.
+- Success-rate bar plot: `experiments/llm_navigation/plots/success_rate_bar.png`.
+- Per-condition summaries:
+  - `experiments/llm_navigation/policy_only/metrics/policy_only_summary.json`
+  - `experiments/llm_navigation/always_llm/metrics/always_llm_summary.json`
+  - `experiments/llm_navigation/uncertainty_switching/metrics/uncertainty_switching_summary.json`
+- Switching plots:
+  - `experiments/llm_navigation/uncertainty_switching/plots/uncertainty_switching_trajectory.png`
+  - `experiments/llm_navigation/uncertainty_switching/plots/uncertainty_switching_uncertainty.png`
+
+Interpretation:
+
+- The OpenAI API path works: `gpt-5.4` accepted the overhead image prompt and returned parseable JSON commands with zero recorded API errors.
+- The uncertainty trigger works: switching called the LLM `175` times instead of the `500` calls used by `always_llm`.
+- The Step 5 success hypothesis was not met: `uncertainty_switching` did not improve success rate over `policy_only`.
+- `always_llm` reduced the mean final distance slightly, but still produced `0/20` successes.
+- The likely bottleneck is not LLM perception or trigger timing. It is the action interface: the pretrained flat H1 velocity policy is reliable for open-space goal navigation, but it does not execute the repeated lateral/yaw corrections well enough to route around a blocking obstacle.
+
+Next technical implication:
+
+- For the next iteration, use the LLM to choose an intermediate waypoint/subgoal around the obstacle and let the proven Step 2 goal controller track that waypoint, or train/adapt the low-level policy in obstacle scenes with explicit lateral/turning recovery behavior.
