@@ -93,3 +93,63 @@ Interpretation:
 
 - Physics stepping for H1 works in headless mode despite graphics initialization errors.
 - Rendering, cameras, and RGB/depth sensors are still high risk until NVIDIA Vulkan/graphics device enumeration is fixed.
+
+## H1 Pretrained Policy Command Rollouts
+
+Pretrained checkpoint:
+
+- Task: `Isaac-Velocity-Flat-H1-v0`
+- Workflow: `rsl_rl`
+- Status: available
+- Cached path: `.pretrained_checkpoints/rsl_rl/Isaac-Velocity-Flat-H1-v0/checkpoint.pt`
+
+Forward command rollout:
+
+```bash
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/rollout_h1_policy_commands.py \
+  --headless --device cuda:0 --num_envs 1 --steps 100 \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --case forward_vx_1 --vx 1.0 --vy 0.0 --yaw 0.0 \
+  --output experiments/logs/h1_forward_metrics.json
+```
+
+Result:
+
+- Duration: 2.0 s.
+- Start position: `[0.0, 0.0, 1.05]`.
+- End position: `[1.624, 0.057, 0.900]`.
+- Delta x: `+1.624 m`.
+- Delta y: `+0.057 m`.
+- Delta heading: `-0.0015 rad`.
+- Mean base x velocity: `0.819 m/s`.
+- Done count: `0`.
+
+Yaw command rollout:
+
+```bash
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/rollout_h1_policy_commands.py \
+  --headless --device cuda:0 --num_envs 1 --steps 100 \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --case yaw_0_5 --vx 0.0 --vy 0.0 --yaw 0.5 \
+  --output experiments/logs/h1_yaw_metrics.json
+```
+
+Result:
+
+- Duration: 2.0 s.
+- Start heading: `0.0 rad`.
+- End heading: `1.041 rad`.
+- Delta heading: `+1.041 rad`.
+- Mean base yaw velocity: `0.532 rad/s`.
+- Delta x: `+0.011 m`.
+- Delta y: `+0.004 m`.
+- Done count: `0`.
+
+Interpretation:
+
+- The pretrained H1 flat velocity policy is usable.
+- `vx=1.0` produces forward locomotion.
+- `yaw=0.5` produces in-place turning with minimal translation.
+- This is sufficient to proceed with physics-only high-level navigation.
