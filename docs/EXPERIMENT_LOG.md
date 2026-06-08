@@ -60,3 +60,36 @@ Interpretation:
 - Isaac Lab is installable on this server.
 - The current container was likely launched with `NVIDIA_DRIVER_CAPABILITIES=compute,utility`, not graphics/display.
 - H1 Isaac Sim execution probably requires relaunching VESSL with graphics-capable NVIDIA runtime or an Isaac Sim-ready image.
+
+## H1 100 Step Smoke Run
+
+Command:
+
+```bash
+source env_isaaclab/bin/activate
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/run_h1_100_steps.py \
+  --headless --device cuda:0 --num_envs 1 --steps 100 \
+  --task Isaac-Velocity-Flat-H1-v0
+```
+
+Result:
+
+- `Isaac-Velocity-Flat-H1-v0` config parsed.
+- Gym environment created.
+- Observation space: `Dict('policy': Box(-inf, inf, (1, 69), float32))`.
+- Action space: `Box(-inf, inf, (1, 19), float32)`.
+- Environment reset succeeded.
+- 100 random-action steps completed.
+- Exit code: 0.
+
+Persistent warning/error:
+
+- Isaac Sim reports `Driver Version: 0 | Graphics API: Vulkan`.
+- `gpu.foundation.plugin` reports `No device could be created`.
+- `PhysXFoundation` reports it cannot get GPU foundation / graphics.
+
+Interpretation:
+
+- Physics stepping for H1 works in headless mode despite graphics initialization errors.
+- Rendering, cameras, and RGB/depth sensors are still high risk until NVIDIA Vulkan/graphics device enumeration is fixed.
