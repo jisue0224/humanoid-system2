@@ -458,3 +458,89 @@ Interpretation:
 Next technical implication:
 
 - For the next iteration, use the LLM to choose an intermediate waypoint/subgoal around the obstacle and let the proven Step 2 goal controller track that waypoint, or train/adapt the low-level policy in obstacle scenes with explicit lateral/turning recovery behavior.
+
+## Step 5b LLM Waypoint Navigation
+
+Motivation:
+
+- Step 5 raw velocity commands did not rescue H1 from the obstacle.
+- The low-level H1 flat policy follows open-space velocity commands well, but repeated direct lateral/yaw commands do not produce reliable obstacle avoidance.
+- This run changes the LLM output from raw velocity command to an intermediate waypoint.
+- The existing Step 2 high-level goal controller then tracks that waypoint as a temporary goal.
+
+Implementation:
+
+- Added `scripts/llm_waypoint_navigation_h1.py`.
+- Added `scripts/merge_llm_waypoint_navigation_results.py`.
+- LLM output schema:
+  - `reasoning`
+  - `waypoint_x`
+  - `waypoint_y`
+- If a waypoint is active, H1 tracks it with the same yaw+forward goal controller used in Step 2.
+- Once the waypoint is reached within `0.8 m`, H1 returns to the final goal.
+- Waypoint timeout: `320` steps.
+- Max episode length: `700` steps.
+- Goal: `(5.0, 0.0)`.
+- Obstacle: center `(2.5, 0.0, 0.5)`, size `(1.0, 1.0, 1.0)`.
+- Uncertainty trigger threshold: `0.0247`.
+- LLM model: `gpt-5.4`.
+
+Pure LLM waypoint result:
+
+- Output directory: `experiments/llm_waypoint_navigation`.
+- `policy_only`:
+  - Success rate: `0.000`.
+  - Mean episode length: `700.0`.
+  - Mean final distance: `3.095 m`.
+  - LLM calls: `0`.
+- `uncertainty_switching`:
+  - Success rate: `0.400`.
+  - Mean episode length: `639.7`.
+  - Mean final distance: `1.646 m`.
+  - LLM calls: `112`.
+  - LLM errors: `0`.
+
+Observation:
+
+- Pure LLM waypointing is a clear improvement over raw velocity commands and policy-only.
+- Successful episodes usually occur when the LLM eventually chooses a waypoint past the obstacle, such as `x ~= 3.3-3.6`, `|y| ~= 1.1-1.2`.
+- Failed episodes often repeat a first-stage lateral waypoint near `x ~= 1.6-1.9` without advancing to a past-obstacle waypoint.
+
+Post-processed waypoint result:
+
+- Output directory: `experiments/llm_waypoint_navigation_postprocessed`.
+- The LLM still chooses the side and proposes the waypoint, but a geometric post-processor enforces two safety rules:
+  - If H1 is still close to the obstacle front, force a first-stage lateral escape waypoint beside/slightly behind the robot.
+  - If H1 already has lateral clearance, keep the same side and force the next waypoint past the obstacle.
+- `policy_only`:
+  - Success rate: `0.000`.
+  - Mean episode length: `700.0`.
+  - Mean final distance: `3.095 m`.
+  - LLM calls: `0`.
+- `uncertainty_switching`:
+  - Success rate: `1.000`.
+  - Mean episode length: `509.3`.
+  - Mean final distance: `0.338 m`.
+  - LLM calls: `60`.
+  - LLM call rate: `0.00429` calls per environment-step.
+  - LLM errors: `0`.
+
+Artifacts:
+
+- Pure waypoint summary: `experiments/llm_waypoint_navigation/metrics/llm_waypoint_navigation_summary.json`.
+- Pure waypoint success plot: `experiments/llm_waypoint_navigation/plots/success_rate_bar.png`.
+- Post-processed waypoint summary: `experiments/llm_waypoint_navigation_postprocessed/metrics/llm_waypoint_navigation_summary.json`.
+- Post-processed waypoint success plot: `experiments/llm_waypoint_navigation_postprocessed/plots/success_rate_bar.png`.
+- Post-processed trajectory plot: `experiments/llm_waypoint_navigation_postprocessed/uncertainty_switching/plots/uncertainty_switching_waypoint_trajectory.png`.
+- Post-processed uncertainty plot: `experiments/llm_waypoint_navigation_postprocessed/uncertainty_switching/plots/uncertainty_switching_waypoint_uncertainty.png`.
+
+Interpretation:
+
+- The waypoint abstraction fixes the Step 5 action-interface problem.
+- Pure LLM waypointing already improves success from `0.0` to `0.4`.
+- Adding a small geometric waypoint validator/planner raises success to `1.0` while reducing LLM calls from `112` to `60`.
+- The working architecture is now:
+  - System 1: pretrained H1 locomotion policy + goal controller.
+  - Uncertainty: progress stall trigger.
+  - System 2: LLM selects a detour side/waypoint from overhead visual context.
+  - Safety/planning shim: ensures the waypoint is physically usable for the H1 forward-walking controller.

@@ -1,0 +1,24 @@
+{
+  "conditions": {
+    "policy_only": {
+      "success_rate": 0.0,
+      "mean_episode_length": 700.0,
+      "mean_final_distance": 3.0949031591415403,
+      "total_llm_calls": 0,
+      "llm_call_rate": 0.0,
+      "llm_errors": 0
+    },
+    "uncertainty_switching": {
+      "success_rate": 1.0,
+      "mean_episode_length": 509.3,
+      "mean_final_distance": 0.33819718658924103,
+      "total_llm_calls": 60,
+      "llm_call_rate": 0.004285714285714286,
+      "llm_errors": 0
+    }
+  },
+  "summary_paths": {
+    "policy_only": "experiments/llm_waypoint_navigation_postprocessed/policy_only/metrics/policy_only_summary.json",
+    "uncertainty_switching": "experiments/llm_waypoint_navigation_postprocessed/uncertainty_switching/metrics/uncertainty_switching_summary.json"
+  }
+}
