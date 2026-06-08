@@ -1,0 +1,45 @@
+{
+  "goal": [
+    5.0,
+    0.0
+  ],
+  "combined_uncertainty_threshold_p90": 0.02473332405090332,
+  "scenario_a_no_obstacle": {
+    "success_rate": 1.0,
+    "mean_final_distance": 0.4836695820093155,
+    "mean_uncertainty": 0.0004076520223466177,
+    "mean_max_uncertainty": 0.02112824440002441,
+    "uncertainty_threshold_p90": 0.0,
+    "mean_trigger_count": 1.0,
+    "mean_trigger_count_combined_threshold": 0.0
+  },
+  "scenario_b_static_obstacle": {
+    "success_rate": 0.0,
+    "done_rate": 0.0,
+    "mean_final_distance": 3.0940350532531737,
+    "mean_min_distance": 3.073548674583435,
+    "mean_uncertainty": 0.016805406795229003,
+    "mean_max_uncertainty": 0.027982397079467775,
+    "uncertainty_threshold_p90": 0.025456279516220093,
+    "mean_trigger_count": 17.0,
+    "mean_trigger_count_combined_threshold": 18.3,
+    "mean_inside_obstacle_steps": 0.0,
+    "obstacle_pos": [
+      2.5,
+      0.0,
+      0.5
+    ],
+    "obstacle_size": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "behavior": "blocked_or_stalled_near_obstacle"
+  },
+  "artifact_sources": {
+    "scenario_a": "experiments/obstacle_uncertainty/metrics/scenario_a_no_obstacle_summary.json",
+    "scenario_b": "experiments/obstacle_uncertainty/metrics/scenario_b_static_obstacle_summary.json",
+    "trajectory_comparison": "experiments/obstacle_uncertainty/plots/scenario_a_vs_b_trajectory.png",
+    "uncertainty_comparison": "experiments/obstacle_uncertainty/plots/scenario_a_vs_b_uncertainty.png"
+  }
+}

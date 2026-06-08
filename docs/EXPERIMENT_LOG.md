@@ -206,3 +206,92 @@ Interpretation:
 - Physics-based H1 goal navigation works with the pretrained velocity policy and a rule-based high-level controller.
 - The controller can reach forward, side, diagonal, and behind/side goals by combining yaw alignment with forward walking.
 - This is a usable baseline for Step 3 obstacle insertion and progress-based uncertainty measurement.
+
+## Step 3 Static Obstacle and Progress Uncertainty
+
+Implementation:
+
+- Added `scripts/obstacle_uncertainty_h1.py`.
+- Added `scripts/merge_obstacle_uncertainty_results.py`.
+- Static obstacle uses Isaac Lab `RigidObjectCfg` with `CuboidCfg`.
+- Default obstacle size: `(1.0, 1.0, 1.0) m`.
+- Default obstacle position: `(2.5, 0.0, 0.5)`, between start `(0.0, 0.0)` and goal `(5.0, 0.0)`.
+- Obstacle position and size are configurable with `--obstacle_pos` and `--obstacle_size`.
+- `base_contact` termination is disabled in this runner so obstacle contact can be observed as stalled physics instead of immediate episode reset.
+- Isaac Sim was run once per scenario because creating a second env inside the same process can hang in this headless VESSL container.
+
+Commands:
+
+```bash
+source env_isaaclab/bin/activate
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/obstacle_uncertainty_h1.py \
+  --headless --device cuda:0 --num_envs 10 --episodes_per_scenario 10 --max_steps 700 \
+  --scenario no_obstacle \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --output_dir experiments/obstacle_uncertainty
+
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/obstacle_uncertainty_h1.py \
+  --headless --device cuda:0 --num_envs 10 --episodes_per_scenario 10 --max_steps 700 \
+  --scenario obstacle \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --output_dir experiments/obstacle_uncertainty
+
+python scripts/merge_obstacle_uncertainty_results.py \
+  --output_dir experiments/obstacle_uncertainty
+```
+
+Uncertainty:
+
+- Window: recent `5` steps.
+- Definition: `max(0, min_progress - (distance[t-window] - distance[t]))`.
+- `min_progress`: `0.02 m` over the 5-step window.
+- Common A/B trigger threshold: p90 over the combined scenario A+B uncertainty distribution.
+- Combined p90 threshold: `0.0247`.
+
+Scenario A: no obstacle:
+
+- Episodes: `10`.
+- Success rate: `1.000`.
+- Mean final distance: `0.484 m`.
+- Mean uncertainty: `0.00041`.
+- Mean max uncertainty: `0.0211`.
+- Mean trigger count with combined threshold: `0.0`.
+
+Scenario B: static obstacle:
+
+- Episodes: `10`.
+- Success rate: `0.000`.
+- Done rate: `0.000` because base-contact termination is disabled.
+- Mean final distance: `3.094 m`.
+- Mean min distance: `3.074 m`.
+- Mean uncertainty: `0.0168`.
+- Mean max uncertainty: `0.0280`.
+- Mean trigger count with combined threshold: `18.3`.
+- Mean inside-obstacle steps: `0.0`.
+
+Obstacle behavior:
+
+- H1 does not pass through the obstacle.
+- With default termination enabled, contact ended the episode around base `x ~= 1.91 m`, just before the obstacle front face at `x = 2.0 m`.
+- With base-contact termination disabled for analysis, H1 remains blocked/stalled near the obstacle front and keeps trying to move forward.
+- This confirms physics collision is active and the obstacle is not just visual.
+
+Artifacts:
+
+- Combined summary JSON: `experiments/obstacle_uncertainty/metrics/obstacle_uncertainty_summary.json`.
+- Scenario summaries:
+  - `experiments/obstacle_uncertainty/metrics/scenario_a_no_obstacle_summary.json`
+  - `experiments/obstacle_uncertainty/metrics/scenario_b_static_obstacle_summary.json`
+- Plots:
+  - `experiments/obstacle_uncertainty/plots/scenario_a_vs_b_trajectory.png`
+  - `experiments/obstacle_uncertainty/plots/scenario_a_vs_b_uncertainty.png`
+  - scenario-specific trajectory and uncertainty plots.
+
+Interpretation:
+
+- Scenario A keeps uncertainty effectively low while reaching the goal.
+- Scenario B creates a clear progress stall near the obstacle.
+- The progress-based uncertainty measure separates the two cases under the shared A/B p90 threshold.
+- This is a usable trigger signal for Step 4/5 camera capture and LLM intervention.
