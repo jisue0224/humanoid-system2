@@ -34,6 +34,31 @@ For non-interactive smoke tests after you have accepted the EULA:
 OMNI_KIT_ACCEPT_EULA=YES python scripts/smoke_isaac.py
 ```
 
+## Headless Graphics Requirements
+
+Isaac Sim needs more than CUDA compute access. The container must expose NVIDIA graphics/Vulkan capability.
+
+Useful checks:
+
+```bash
+nvidia-smi
+vulkaninfo --summary
+env | grep NVIDIA_DRIVER_CAPABILITIES
+```
+
+`vulkaninfo` should list the NVIDIA GPU. If it only lists `llvmpipe`, Isaac Sim may install but will not run H1 simulation correctly.
+
+On minimal Ubuntu containers, these OS packages are commonly needed:
+
+```bash
+apt-get update
+apt-get install -y --no-install-recommends \
+  libgl1 libglx0 libegl1 libsm6 libxt6 libx11-6 libxext6 libxrender1 \
+  libxcb1 libxau6 libxdmcp6 libvulkan1 vulkan-tools mesa-vulkan-drivers
+```
+
+Do not install a newer NVIDIA user-space driver than the host kernel driver. It can break `nvidia-smi` with a driver/library mismatch.
+
 ## Fallback Plan
 
 If Isaac Lab cannot run headlessly on VESSL, use MuJoCo:

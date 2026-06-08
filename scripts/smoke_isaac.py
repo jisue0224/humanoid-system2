@@ -22,10 +22,18 @@ def main() -> int:
         module = importlib.import_module("isaacsim")
         version = getattr(module, "__version__", "unknown")
         print(f"isaacsim: ok ({version})")
+
+        simulation_app = None
+        if hasattr(module, "SimulationApp"):
+            simulation_app = module.SimulationApp({"headless": True})
+
         for name in ["isaaclab_tasks", "isaaclab_rl"]:
             module = importlib.import_module(name)
             version = getattr(module, "__version__", "unknown")
             print(f"{name}: ok ({version})")
+
+        if simulation_app is not None:
+            simulation_app.close()
     else:
         print("isaacsim and task imports skipped; set OMNI_KIT_ACCEPT_EULA=YES after accepting NVIDIA Omniverse EULA")
 
