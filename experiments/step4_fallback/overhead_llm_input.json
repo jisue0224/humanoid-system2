@@ -1,0 +1,52 @@
+{
+  "status": "success",
+  "source_summary": "experiments/obstacle_uncertainty/metrics/scenario_b_static_obstacle_summary.json",
+  "scenario_key": "scenario_b_static_obstacle",
+  "episode": 0,
+  "step": 134,
+  "image_path": "experiments/step4_fallback/overhead_llm_input.png",
+  "resolution": [
+    512,
+    512
+  ],
+  "current_pos": [
+    1.9160141944885254,
+    0.02623748779296875
+  ],
+  "goal": [
+    5.0,
+    0.0
+  ],
+  "obstacle_pos": [
+    2.5,
+    0.0,
+    0.5
+  ],
+  "obstacle_size": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "recent_trajectory": [
+    [
+      1.921644687652588,
+      0.027702808380126953
+    ],
+    [
+      1.9195756912231445,
+      0.026666879653930664
+    ],
+    [
+      1.9169268608093262,
+      0.025672435760498047
+    ],
+    [
+      1.9158415794372559,
+      0.025500774383544922
+    ],
+    [
+      1.9160141944885254,
+      0.02623748779296875
+    ]
+  ]
+}

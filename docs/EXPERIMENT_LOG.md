@@ -295,3 +295,65 @@ Interpretation:
 - Scenario B creates a clear progress stall near the obstacle.
 - The progress-based uncertainty measure separates the two cases under the shared A/B p90 threshold.
 - This is a usable trigger signal for Step 4/5 camera capture and LLM intervention.
+
+## Step 4 Camera Sensor Test and Overhead Fallback
+
+Isaac Lab camera test:
+
+- Added `scripts/test_h1_camera_sensor.py`.
+- H1 minimal task does not expose a separate `head_link` in the local config search; the test attaches a camera to `Robot/torso_link/head_cam` with a head-height offset.
+- First run without `--enable_cameras` fails as expected:
+  - `RuntimeError: A camera was spawned without the --enable_cameras flag. Please use --enable_cameras to enable rendering.`
+- Second run with `--enable_cameras` reaches the rendering kit and fails because this VESSL container does not expose a usable graphics/Vulkan GPU device.
+
+Command:
+
+```bash
+source env_isaaclab/bin/activate
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/test_h1_camera_sensor.py \
+  --headless --enable_cameras --device cuda:0 \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --output_dir experiments/step4_camera_test
+```
+
+Key rendering errors:
+
+- `GLFW initialization failed.`
+- `No device could be created.`
+- `Failed to create any GPU devices, including an attempt with compatibility mode.`
+- `GPU Foundation is not initialized!`
+- `CUDA libs are present, but no suitable CUDA GPU was found!`
+
+Interpretation:
+
+- Isaac Lab physics still works, but RGB/depth camera rendering is not usable in this current VESSL container.
+- This matches the previous Vulkan state where Isaac Sim reported `Driver Version: 0 | Graphics API: Vulkan`.
+- RGB/depth camera should be retried only after launching an Isaac Sim-ready image or a container with NVIDIA graphics/Vulkan capability.
+
+Fallback overhead view:
+
+- Added `scripts/render_overhead_fallback.py`.
+- Generated a 512x512 matplotlib overhead image for LLM input.
+- Source rollout: Step 3 obstacle scenario B.
+- Chosen trigger candidate: episode `0`, step `134`.
+- H1 position: `(1.916, 0.026)`.
+- Goal: `(5.0, 0.0)`.
+- Obstacle: center `(2.5, 0.0, 0.5)`, size `(1.0, 1.0, 1.0)`.
+- Includes:
+  - H1 current position as blue circle.
+  - Goal as green star.
+  - Obstacle as gray box.
+  - Recent 5-step trajectory as blue line.
+  - Grid lines and x/y axes.
+
+Artifacts:
+
+- Fallback image: `experiments/step4_fallback/overhead_llm_input.png`.
+- Metadata: `experiments/step4_fallback/overhead_llm_input.json`.
+- Image resolution: `512x512`.
+
+Conclusion:
+
+- Isaac Lab camera path is blocked by rendering/Vulkan in this server session.
+- Matplotlib overhead fallback is working and is ready as the LLM visual input for the next step.
