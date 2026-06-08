@@ -153,3 +153,56 @@ Interpretation:
 - `vx=1.0` produces forward locomotion.
 - `yaw=0.5` produces in-place turning with minimal translation.
 - This is sufficient to proceed with physics-only high-level navigation.
+
+## Step 2 Goal Navigation
+
+Implementation:
+
+- Added `scripts/goal_nav_h1.py`.
+- Loads the published RSL-RL checkpoint for `Isaac-Velocity-Flat-H1-v0`.
+- Runs multiple goal-navigation episodes in parallel envs to avoid repeated Isaac Sim reset hangs observed in this headless container.
+- High-level controller computes a world-frame target direction from current H1 base position to goal.
+- Controller outputs `(vx, vy, yaw)` by turning toward the goal and moving forward when heading error is small.
+- `vy` is kept in the command interface, but defaults to `0.0` because the pretrained H1 flat policy was validated mainly for forward velocity and yaw command following.
+
+Command:
+
+```bash
+source env_isaaclab/bin/activate
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/goal_nav_h1.py \
+  --headless --device cuda:0 --num_envs 30 --episodes 30 --max_steps 700 \
+  --task Isaac-Velocity-Flat-H1-v0 \
+  --output_dir experiments/goal_nav
+```
+
+Goal set:
+
+- `(5.0, 0.0)`
+- `(0.0, 5.0)`
+- `(5.0, 5.0)`
+- `(-3.0, 4.0)`
+
+Result:
+
+- Episodes: `30`.
+- Success criterion: final goal distance `< 0.5 m`.
+- Success rate: `1.000`.
+- All environments succeeded by step `363`.
+- Per-goal result:
+  - `(5.0, 0.0)`: `8/8`, mean final distance `0.342 m`, max final distance `0.347 m`.
+  - `(0.0, 5.0)`: `8/8`, mean final distance `0.329 m`, max final distance `0.335 m`.
+  - `(5.0, 5.0)`: `7/7`, mean final distance `0.487 m`, max final distance `0.492 m`.
+  - `(-3.0, 4.0)`: `7/7`, mean final distance `0.313 m`, max final distance `0.322 m`.
+
+Artifacts:
+
+- Summary JSON: `experiments/goal_nav/metrics/goal_nav_summary.json`.
+- Per-episode overhead trajectory plots: `experiments/goal_nav/plots/episode_*.png`.
+- Log: `experiments/logs/goal_nav_30ep.log` locally, ignored by git.
+
+Interpretation:
+
+- Physics-based H1 goal navigation works with the pretrained velocity policy and a rule-based high-level controller.
+- The controller can reach forward, side, diagonal, and behind/side goals by combining yaw alignment with forward walking.
+- This is a usable baseline for Step 3 obstacle insertion and progress-based uncertainty measurement.
