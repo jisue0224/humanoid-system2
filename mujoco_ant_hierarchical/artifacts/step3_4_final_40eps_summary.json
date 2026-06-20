@@ -1,0 +1,34 @@
+{
+  "rows": [
+    {
+      "condition": "policy_only",
+      "success_rate": 0.025,
+      "success_count": 1,
+      "success_se": 0.024685522072664372,
+      "mean_final_distance": 2.8913510487285934,
+      "llm_calls": 0,
+      "timeout_count": 0,
+      "gate_count": 0
+    },
+    {
+      "condition": "progress_switching",
+      "success_rate": 0.05,
+      "success_count": 2,
+      "success_se": 0.034460121880225555,
+      "mean_final_distance": 2.746895674772128,
+      "llm_calls": 62,
+      "timeout_count": 41,
+      "gate_count": 10
+    },
+    {
+      "condition": "depth_switching",
+      "success_rate": 0.225,
+      "success_count": 9,
+      "success_se": 0.06602556323122129,
+      "mean_final_distance": 2.9580818082568383,
+      "llm_calls": 119,
+      "timeout_count": 69,
+      "gate_count": 28
+    }
+  ]
+}
