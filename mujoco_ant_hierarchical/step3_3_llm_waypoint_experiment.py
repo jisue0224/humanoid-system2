@@ -54,6 +54,30 @@ def parse_json(text: str) -> dict:
         return json.loads(match.group(0))
 
 
+def waypoint_gate_completed(
+    current_xy: np.ndarray,
+    side: int,
+    *,
+    valid: bool,
+    gate_x_margin: float,
+    gate_y_abs: float,
+) -> bool:
+    ox, oy, _ = DEFAULT_OBSTACLE_POS
+    sx, _, _ = DEFAULT_OBSTACLE_SIZE
+    gate_x = ox + sx + gate_x_margin
+    return valid and current_xy[0] >= gate_x and side * (current_xy[1] - oy) >= gate_y_abs
+
+
+def waypoint_gate_valid(current_xy: np.ndarray, side: int, *, gate_x_margin: float, gate_y_abs: float) -> bool:
+    ox, oy, _ = DEFAULT_OBSTACLE_POS
+    sx, _, _ = DEFAULT_OBSTACLE_SIZE
+    corridor_x_min = ox - sx
+    corridor_x_max = ox + sx + gate_x_margin
+    if corridor_x_min <= current_xy[0] <= corridor_x_max:
+        return side * (current_xy[1] - oy) >= gate_y_abs
+    return True
+
+
 def call_llm_waypoint(
     client: OpenAI,
     *,
@@ -121,6 +145,9 @@ def run_episode(
     max_steps: int,
     success_radius: float,
     waypoint_radius: float,
+    waypoint_completion: str,
+    gate_x_margin: float,
+    gate_y_abs: float,
     uncertainty_threshold: float,
     uncertainty_window: int,
     min_progress: float,
@@ -136,11 +163,14 @@ def run_episode(
     goal_xy = np.array(DEFAULT_GOAL_XY, dtype=np.float64)
     active_waypoint: np.ndarray | None = None
     active_waypoint_start: int | None = None
+    active_waypoint_side: int | None = None
+    active_waypoint_gate_valid = True
     next_llm_allowed = 0
     recent_waypoints: list[np.ndarray] = []
     trajectory = []
     distances = []
     llm_calls = []
+    waypoint_events = []
     success = False
     terminated = False
     truncated = False
@@ -154,16 +184,47 @@ def run_episode(
             success = True
             break
 
-        if active_waypoint is not None and float(np.linalg.norm(active_waypoint - current_xy)) < waypoint_radius:
-            active_waypoint = None
-            active_waypoint_start = None
-        elif (
-            active_waypoint is not None
-            and active_waypoint_start is not None
-            and step - active_waypoint_start >= waypoint_timeout_steps
-        ):
-            active_waypoint = None
-            active_waypoint_start = None
+        if active_waypoint is not None:
+            completed = False
+            completion_reason = None
+            if waypoint_completion == "gate" and active_waypoint_side is not None:
+                active_waypoint_gate_valid = active_waypoint_gate_valid and waypoint_gate_valid(
+                    current_xy,
+                    active_waypoint_side,
+                    gate_x_margin=gate_x_margin,
+                    gate_y_abs=gate_y_abs,
+                )
+                completed = waypoint_gate_completed(
+                    current_xy,
+                    active_waypoint_side,
+                    valid=active_waypoint_gate_valid,
+                    gate_x_margin=gate_x_margin,
+                    gate_y_abs=gate_y_abs,
+                )
+                completion_reason = "gate" if completed else None
+            else:
+                completed = float(np.linalg.norm(active_waypoint - current_xy)) < waypoint_radius
+                completion_reason = "radius" if completed else None
+
+            timed_out = (
+                not completed
+                and active_waypoint_start is not None
+                and step - active_waypoint_start >= waypoint_timeout_steps
+            )
+
+            if completed or timed_out:
+                waypoint_events.append(
+                    {
+                        "step": step,
+                        "event": completion_reason if completed else "timeout",
+                        "waypoint": active_waypoint.tolist(),
+                        "current_xy": current_xy.tolist(),
+                    }
+                )
+                active_waypoint = None
+                active_waypoint_start = None
+                active_waypoint_side = None
+                active_waypoint_gate_valid = True
 
         uncertainty = progress_uncertainty(distances, window=uncertainty_window, min_progress=min_progress)[-1]
         should_call = False
@@ -200,6 +261,8 @@ def run_episode(
             if waypoint is not None:
                 active_waypoint = waypoint
                 active_waypoint_start = step
+                active_waypoint_side = 1 if waypoint[1] >= DEFAULT_OBSTACLE_POS[1] else -1
+                active_waypoint_gate_valid = True
                 recent_waypoints.append(waypoint)
             llm_calls.append(
                 {
@@ -238,6 +301,7 @@ def run_episode(
         "uncertainty": uncertainty_trace,
         "llm_calls": llm_calls,
         "llm_call_count": len(llm_calls),
+        "waypoint_events": waypoint_events,
     }
 
 
@@ -276,6 +340,9 @@ def main() -> None:
     parser.add_argument("--max_steps", type=int, default=220)
     parser.add_argument("--success_radius", type=float, default=0.75)
     parser.add_argument("--waypoint_radius", type=float, default=0.75)
+    parser.add_argument("--waypoint_completion", choices=("radius", "gate"), default="radius")
+    parser.add_argument("--gate_x_margin", type=float, default=0.05)
+    parser.add_argument("--gate_y_abs", type=float, default=0.5)
     parser.add_argument("--slow_radius", type=float, default=7.0)
     parser.add_argument("--min_action_scale", type=float, default=0.3)
     parser.add_argument("--waypoint_slow_radius", type=float, default=0.0)
@@ -329,6 +396,9 @@ def main() -> None:
             max_steps=args.max_steps,
             success_radius=args.success_radius,
             waypoint_radius=args.waypoint_radius,
+            waypoint_completion=args.waypoint_completion,
+            gate_x_margin=args.gate_x_margin,
+            gate_y_abs=args.gate_y_abs,
             uncertainty_threshold=args.uncertainty_threshold,
             uncertainty_window=args.uncertainty_window,
             min_progress=args.min_progress,
@@ -355,6 +425,9 @@ def main() -> None:
         "mean_llm_calls": float(np.mean([result["llm_call_count"] for result in results])),
         "total_llm_calls": int(sum(result["llm_call_count"] for result in results)),
         "postprocess": "disabled",
+        "waypoint_completion": args.waypoint_completion,
+        "gate_x_margin": args.gate_x_margin,
+        "gate_y_abs": args.gate_y_abs,
         "goal_action_scaling": {
             "slow_radius": args.slow_radius,
             "min_action_scale": args.min_action_scale,
