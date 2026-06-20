@@ -83,6 +83,7 @@ step `109`.
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative/representative_depth_episode.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative/ego_rgb_step16.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative/ego_depth_step16.png`
+- `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_demo/depth_switching_seed6001_demo.mp4`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_progress/uncertainty_switching/summary.json`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_progress/uncertainty_switching/trajectories.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_depth/uncertainty_switching/summary.json`
