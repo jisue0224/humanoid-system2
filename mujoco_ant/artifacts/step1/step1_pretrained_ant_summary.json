@@ -1,0 +1,44 @@
+{
+  "env_id": "Ant-v4",
+  "policy_repo_id": "jren123/sac-ant-v4",
+  "policy_filename": "SAC-Ant-v4.zip",
+  "checkpoint_path": "/root/.cache/huggingface/hub/models--jren123--sac-ant-v4/snapshots/35b72bfd61f648c21445f722cb43b89f4b01b3cd/SAC-Ant-v4.zip",
+  "seed": 0,
+  "requested_steps": 100,
+  "actual_steps": 100,
+  "terminated": false,
+  "truncated": false,
+  "dt": 0.05,
+  "elapsed_s": 5.0,
+  "observation_shape": [
+    27
+  ],
+  "action_shape": [
+    8
+  ],
+  "start_xy": [
+    0.027392337464290872,
+    -0.04604265724722594
+  ],
+  "end_xy": [
+    22.354494392450412,
+    1.8778675353597385
+  ],
+  "delta_xy": [
+    22.32710205498612,
+    1.9239101926069644
+  ],
+  "xy_displacement": 22.40983972729351,
+  "path_length": 22.818852019149645,
+  "mean_xy_velocity": [
+    4.465420410997224,
+    0.38478203852139287
+  ],
+  "torso_z_min": 0.4053431337811143,
+  "torso_z_max": 0.7929925384232088,
+  "torso_z_final": 0.791551753983886,
+  "reward_sum": 455.3461940686019,
+  "reward_mean": 4.553461940686019,
+  "action_abs_mean": 0.40241331301629546,
+  "stable_100_step_rollout": true
+}
