@@ -116,14 +116,55 @@ obstacle detection.
 
 ## Experiment 3: Temporal Smoothing
 
-Not run yet. Based on the current result, smoothing is worth trying next:
+We ran 3-frame smoothing on the current best ROI/threshold candidate:
 
-- `center_20x30_mean`
-- threshold around `0.20..0.25`
-- temporal median or mean over `3` frames
+- ROI: `center_20x30_mean`
+- threshold: `0.25`
+- smoothing window: `3` frames
 
-The goal would be to keep the early median offset while reducing the
-false-positive rate below `0.25`.
+| Smoothing | Median offset | Mean offset | False positive rate | Corr(distance, signal) |
+| --- | ---: | ---: | ---: | ---: |
+| none | `-1.0` | `-3.60` | `0.293` | `-0.326` |
+| 3-frame mean | `+1.5` | `+1.20` | `0.276` | `-0.282` |
+| 3-frame median | `+2.5` | `+3.35` | `0.290` | `-0.324` |
+
+Interpretation:
+
+- 3-frame mean lowers the false-positive rate a little, but it flips the
+  trigger from slightly early to late.
+- 3-frame median preserves correlation better than mean, but it is still late
+  and does not improve false positives enough.
+- Neither smoothed variant beats the unsmoothed baseline on the combined
+  objective of early detection plus acceptable false-positive rate.
+
+If we relax the timing requirement and only optimize false positives, the best
+smoothed settings are:
+
+- `3-frame mean` at threshold `0.40`: median offset `+4.0`, false positive
+  rate `0.241`
+- `3-frame median` at threshold `0.45`: median offset `+4.0`, false positive
+  rate `0.249`
+
+These satisfy the false-positive target, but the trigger is too late for the
+current use case.
+
+## Final Selected Signal
+
+The final signal choice remains the unsmoothed setting:
+
+```text
+ROI: center_20x30_mean
+threshold: 0.25
+smoothing: none
+depth_threshold: 3.0
+median_offset: -1.0 step
+mean_offset: -3.60 steps
+false_positive_rate: 0.293
+corr(distance, signal): -0.326
+```
+
+This is the best practical tradeoff we have so far: it is early enough to be
+useful, and smoothing does not improve the overall behavior.
 
 ## Artifacts
 
