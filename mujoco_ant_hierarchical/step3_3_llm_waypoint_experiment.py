@@ -63,10 +63,14 @@ def call_llm_waypoint(
     current_xy: np.ndarray,
     goal_xy: np.ndarray,
     active_waypoint: np.ndarray | None,
+    recent_waypoints: list[np.ndarray],
 ) -> tuple[np.ndarray | None, dict]:
     ox, oy, _ = DEFAULT_OBSTACLE_POS
     sx, sy, _ = DEFAULT_OBSTACLE_SIZE
     waypoint_text = "none" if active_waypoint is None else f"({active_waypoint[0]:.2f}, {active_waypoint[1]:.2f})"
+    recent_text = "none"
+    if recent_waypoints:
+        recent_text = ", ".join(f"({point[0]:.2f}, {point[1]:.2f})" for point in recent_waypoints[-3:])
     user_text = (
         "The images are real MuJoCo RGB renders, not diagrams.\n"
         "Overhead image: red box is the obstacle, green sphere is the final goal, Ant is the robot.\n"
@@ -75,6 +79,8 @@ def call_llm_waypoint(
         f"Final goal xy: ({goal_xy[0]:.2f}, {goal_xy[1]:.2f})\n"
         f"Obstacle center xy: ({ox:.2f}, {oy:.2f}); obstacle half-size xy: ({sx:.2f}, {sy:.2f})\n"
         f"Current active waypoint: {waypoint_text}\n\n"
+        f"Recently attempted waypoints: {recent_text}\n"
+        "If a recently attempted waypoint is close to the current plan and the robot did not make progress, choose a meaningfully different waypoint.\n\n"
         "Return ONE waypoint in world xy coordinates. Do not return the final goal if the obstacle blocks the direct route. "
         "Prefer a waypoint that goes clearly around either the upper or lower side of the red obstacle. "
         "Do not put the waypoint inside the obstacle. "
@@ -107,7 +113,8 @@ def run_episode(
     *,
     episode: int,
     condition: str,
-    controller: DirectionalAntController,
+    goal_controller: DirectionalAntController,
+    waypoint_controller: DirectionalAntController,
     client: OpenAI | None,
     model: str,
     output_dir: Path,
@@ -118,6 +125,8 @@ def run_episode(
     uncertainty_window: int,
     min_progress: float,
     llm_cooldown: int,
+    uncertainty_warmup_steps: int,
+    waypoint_timeout_steps: int,
     goal_near_suppression_radius: float,
     include_ego: bool,
     seed: int,
@@ -126,7 +135,9 @@ def run_episode(
     obs, _ = env.reset(seed=seed)
     goal_xy = np.array(DEFAULT_GOAL_XY, dtype=np.float64)
     active_waypoint: np.ndarray | None = None
+    active_waypoint_start: int | None = None
     next_llm_allowed = 0
+    recent_waypoints: list[np.ndarray] = []
     trajectory = []
     distances = []
     llm_calls = []
@@ -145,6 +156,14 @@ def run_episode(
 
         if active_waypoint is not None and float(np.linalg.norm(active_waypoint - current_xy)) < waypoint_radius:
             active_waypoint = None
+            active_waypoint_start = None
+        elif (
+            active_waypoint is not None
+            and active_waypoint_start is not None
+            and step - active_waypoint_start >= waypoint_timeout_steps
+        ):
+            active_waypoint = None
+            active_waypoint_start = None
 
         uncertainty = progress_uncertainty(distances, window=uncertainty_window, min_progress=min_progress)[-1]
         should_call = False
@@ -154,6 +173,7 @@ def run_episode(
             should_call = (
                 active_waypoint is None
                 and step >= next_llm_allowed
+                and step >= uncertainty_warmup_steps
                 and goal_distance > goal_near_suppression_radius
                 and uncertainty >= uncertainty_threshold
                 and uncertainty > 0.0
@@ -175,9 +195,12 @@ def run_episode(
                 current_xy=current_xy,
                 goal_xy=goal_xy,
                 active_waypoint=active_waypoint,
+                recent_waypoints=recent_waypoints,
             )
             if waypoint is not None:
                 active_waypoint = waypoint
+                active_waypoint_start = step
+                recent_waypoints.append(waypoint)
             llm_calls.append(
                 {
                     "step": step,
@@ -192,6 +215,7 @@ def run_episode(
             next_llm_allowed = step + llm_cooldown
 
         target_xy = active_waypoint if active_waypoint is not None else goal_xy
+        controller = waypoint_controller if active_waypoint is not None else goal_controller
         action, _, _ = controller.predict_with_info(obs, current_xy, target_xy)
         obs, _, terminated, truncated, _ = env.step(action)
         if terminated or truncated:
@@ -254,10 +278,14 @@ def main() -> None:
     parser.add_argument("--waypoint_radius", type=float, default=0.75)
     parser.add_argument("--slow_radius", type=float, default=7.0)
     parser.add_argument("--min_action_scale", type=float, default=0.3)
+    parser.add_argument("--waypoint_slow_radius", type=float, default=0.0)
+    parser.add_argument("--waypoint_min_action_scale", type=float, default=1.0)
     parser.add_argument("--uncertainty_threshold", type=float, default=0.02)
     parser.add_argument("--uncertainty_window", type=int, default=5)
     parser.add_argument("--min_progress", type=float, default=0.02)
     parser.add_argument("--llm_cooldown", type=int, default=30)
+    parser.add_argument("--uncertainty_warmup_steps", type=int, default=15)
+    parser.add_argument("--waypoint_timeout_steps", type=int, default=50)
     parser.add_argument("--goal_near_suppression_radius", type=float, default=1.0)
     parser.add_argument("--model", default="gpt-5.4")
     parser.add_argument("--include_ego", action="store_true")
@@ -274,11 +302,18 @@ def main() -> None:
 
     output_dir = args.output_dir / args.condition
     output_dir.mkdir(parents=True, exist_ok=True)
-    controller = DirectionalAntController(
+    goal_controller = DirectionalAntController(
         config=DirectionalControllerConfig(
             success_radius=args.success_radius,
             slow_radius=args.slow_radius,
             min_action_scale=args.min_action_scale,
+        )
+    )
+    waypoint_controller = DirectionalAntController(
+        config=DirectionalControllerConfig(
+            success_radius=args.waypoint_radius,
+            slow_radius=args.waypoint_slow_radius,
+            min_action_scale=args.waypoint_min_action_scale,
         )
     )
     results = []
@@ -286,7 +321,8 @@ def main() -> None:
         result = run_episode(
             episode=episode,
             condition=args.condition,
-            controller=controller,
+            goal_controller=goal_controller,
+            waypoint_controller=waypoint_controller,
             client=client,
             model=args.model,
             output_dir=output_dir,
@@ -297,6 +333,8 @@ def main() -> None:
             uncertainty_window=args.uncertainty_window,
             min_progress=args.min_progress,
             llm_cooldown=args.llm_cooldown,
+            uncertainty_warmup_steps=args.uncertainty_warmup_steps,
+            waypoint_timeout_steps=args.waypoint_timeout_steps,
             goal_near_suppression_radius=args.goal_near_suppression_radius,
             include_ego=args.include_ego,
             seed=args.seed + episode,
@@ -317,6 +355,16 @@ def main() -> None:
         "mean_llm_calls": float(np.mean([result["llm_call_count"] for result in results])),
         "total_llm_calls": int(sum(result["llm_call_count"] for result in results)),
         "postprocess": "disabled",
+        "goal_action_scaling": {
+            "slow_radius": args.slow_radius,
+            "min_action_scale": args.min_action_scale,
+        },
+        "waypoint_action_scaling": {
+            "slow_radius": args.waypoint_slow_radius,
+            "min_action_scale": args.waypoint_min_action_scale,
+        },
+        "waypoint_timeout_steps": args.waypoint_timeout_steps,
+        "uncertainty_warmup_steps": args.uncertainty_warmup_steps,
         "results": results,
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
