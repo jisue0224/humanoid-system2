@@ -70,6 +70,7 @@ weaker.
 
 ## Artifacts
 
+- `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_comparison.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_progress/uncertainty_switching/summary.json`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_progress/uncertainty_switching/trajectories.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_depth/uncertainty_switching/summary.json`
