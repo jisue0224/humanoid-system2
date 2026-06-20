@@ -33,13 +33,15 @@ The LLM conditions:
 
 No waypoint postprocess is applied. If the model returns a waypoint, the hierarchical controller temporarily uses that waypoint as the target. Once the Ant reaches the waypoint radius, it resumes the final goal.
 
-## Baseline Run Completed
+## Comparison Run Completed
 
-Command:
+Commands:
 
 ```bash
 source env_isaaclab/bin/activate
 python mujoco_ant_hierarchical/step3_3_llm_waypoint_experiment.py --condition policy_only --episodes 20
+python mujoco_ant_hierarchical/step3_3_llm_waypoint_experiment.py --condition always_llm --episodes 20 --include_ego
+python mujoco_ant_hierarchical/step3_3_llm_waypoint_experiment.py --condition uncertainty_switching --episodes 20 --include_ego
 ```
 
 Result:
@@ -47,37 +49,44 @@ Result:
 | Condition | Episodes | Success rate | Mean final distance | LLM calls |
 | --- | ---: | ---: | ---: | ---: |
 | policy_only | `20` | `0.0` | `3.153 m` | `0` |
+| always_llm | `20` | `0.05` | `3.335 m` | `54` |
+| uncertainty_switching | `20` | `0.0` | `3.413 m` | `50` |
 
-Artifact:
+Artifacts:
 
 - `mujoco_ant_hierarchical/artifacts/step3_3_llm/policy_only/summary.json`
 - `mujoco_ant_hierarchical/artifacts/step3_3_llm/policy_only/trajectories.png`
+- `mujoco_ant_hierarchical/artifacts/step3_3_llm/always_llm/summary.json`
+- `mujoco_ant_hierarchical/artifacts/step3_3_llm/always_llm/trajectories.png`
+- `mujoco_ant_hierarchical/artifacts/step3_3_llm/always_llm/llm_images/`
+- `mujoco_ant_hierarchical/artifacts/step3_3_llm/uncertainty_switching/summary.json`
+- `mujoco_ant_hierarchical/artifacts/step3_3_llm/uncertainty_switching/trajectories.png`
+- `mujoco_ant_hierarchical/artifacts/step3_3_llm/uncertainty_switching/llm_images/`
 
-## Blocker
+## Interpretation
 
-The actual LLM comparison could not be run because `OPENAI_API_KEY` is not set in this environment.
+The real-image LLM path works end-to-end:
 
-Checked state:
+- MuJoCo EGL rendered overhead and egocentric images at LLM call steps.
+- The model returned parseable JSON waypoints.
+- No waypoint postprocess was applied before handing waypoints to the hierarchical controller.
 
-```text
-OPENAI_API_KEY set: false
-```
+The comparison result is negative for the current prompt/controller interface. `always_llm`
+had one success out of 20 episodes, but neither LLM condition beat `policy_only` on mean
+final distance, and `uncertainty_switching` did not improve success rate.
 
-The `openai` package was installed into `env_isaaclab`, so once the API key is available the remaining two conditions can be run directly:
+Observed failure pattern:
 
-```bash
-source env_isaaclab/bin/activate
-python mujoco_ant_hierarchical/step3_3_llm_waypoint_experiment.py \
-  --condition always_llm \
-  --episodes 20 \
-  --include_ego
-
-python mujoco_ant_hierarchical/step3_3_llm_waypoint_experiment.py \
-  --condition uncertainty_switching \
-  --episodes 20 \
-  --include_ego
-```
+- The LLM usually suggested plausible obstacle-avoidance waypoints near
+  `x=2.5..3.2, y=+/-1.45..1.6`.
+- The Ant often reached the side of the obstacle but then orbited or stalled near the
+  intermediate waypoint.
+- In the single successful `always_llm` episode, the model first routed above the
+  obstacle and later returned the final goal once the direct path was clear.
+- The current uncertainty trigger fires early and repeatedly in obstacle/stall regions,
+  so it reduced calls only slightly versus `always_llm` (`50` vs `54` calls).
 
 ## Stop Point
 
-Per the requested workflow, stop before claiming Step 3-4 results. The comparison table is incomplete until the actual `always_llm` and `uncertainty_switching` runs execute with a valid OpenAI API key.
+Per the requested workflow, stop after Step 3-4 results. The current postprocess-free
+LLM setup does not yet produce the desired improvement over `policy_only`.
