@@ -1,0 +1,7 @@
+.venv/
+external/
+external_deps/
+logs/
+__pycache__/
+.ipynb_checkpoints/
+*.pyc

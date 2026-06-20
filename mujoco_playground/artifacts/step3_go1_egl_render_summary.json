@@ -1,0 +1,30 @@
+{
+  "renderer": "mujoco.Renderer",
+  "gl_backend": "egl",
+  "env": "Go1JoystickFlatTerrain",
+  "impl": "jax",
+  "outputs": {
+    "top": {
+      "filename": "go1_top_egl.png",
+      "shape": [
+        480,
+        640,
+        3
+      ],
+      "dtype": "uint8",
+      "min": 7,
+      "max": 255
+    },
+    "back": {
+      "filename": "go1_back_egl.png",
+      "shape": [
+        480,
+        640,
+        3
+      ],
+      "dtype": "uint8",
+      "min": 8,
+      "max": 255
+    }
+  }
+}

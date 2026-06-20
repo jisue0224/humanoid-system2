@@ -1,0 +1,51 @@
+{
+  "jax_version": "0.10.2",
+  "jax_backend": "gpu",
+  "jax_devices": [
+    "cuda:0"
+  ],
+  "mujoco_version": "3.9.0",
+  "mujoco_playground_import": true,
+  "locomotion_envs": [
+    "ApolloJoystickFlatTerrain",
+    "BarkourJoystick",
+    "BerkeleyHumanoidJoystickFlatTerrain",
+    "BerkeleyHumanoidJoystickRoughTerrain",
+    "G1JoystickFlatTerrain",
+    "G1JoystickRoughTerrain",
+    "Go1JoystickFlatTerrain",
+    "Go1JoystickRoughTerrain",
+    "Go1Getup",
+    "Go1Handstand",
+    "Go1Footstand",
+    "H1InplaceGaitTracking",
+    "H1JoystickGaitTracking",
+    "Op3Joystick",
+    "SpotFlatTerrainJoystick",
+    "SpotGetup",
+    "SpotJoystickGaitTracking",
+    "T1JoystickFlatTerrain",
+    "T1JoystickRoughTerrain"
+  ],
+  "go1_jax_load": true,
+  "go1_action_size": 12,
+  "go1_dt": 0.02,
+  "go1_observation_size": {
+    "privileged_state": [
+      123
+    ],
+    "state": [
+      48
+    ]
+  },
+  "go1_initial_command": [
+    1.4129691123962402,
+    -0.611178994178772,
+    0.7116400003433228
+  ],
+  "go1_one_step_reward": 0.002262675669044256,
+  "go1_one_step_done": 0.0,
+  "go1_warp_load": false,
+  "go1_warp_error_type": "AttributeError",
+  "go1_warp_error": "type object 'int' has no attribute 'WARP'"
+}
