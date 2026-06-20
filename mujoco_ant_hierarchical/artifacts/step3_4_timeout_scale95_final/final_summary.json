@@ -1,0 +1,74 @@
+{
+  "quick_sweep": [
+    [
+      80,
+      0.85,
+      0.3,
+      1.9321594093093286,
+      27,
+      13,
+      9
+    ],
+    [
+      100,
+      0.85,
+      0.0,
+      2.8326060602999883,
+      21,
+      7,
+      6
+    ],
+    [
+      50,
+      0.9,
+      0.2,
+      2.1095631932075563,
+      34,
+      16,
+      13
+    ],
+    [
+      50,
+      0.95,
+      0.4,
+      1.9651684516511057,
+      36,
+      18,
+      18
+    ]
+  ],
+  "full_run": [
+    {
+      "condition": "policy_only",
+      "success_rate": 0.05,
+      "mean_final_distance": 3.431889962630622,
+      "llm_calls": 0,
+      "timeout_count": 0,
+      "gate_count": 0
+    },
+    {
+      "condition": "always_llm",
+      "success_rate": 0.1,
+      "mean_final_distance": 3.138561039137379,
+      "llm_calls": 78,
+      "timeout_count": 46,
+      "gate_count": 17
+    },
+    {
+      "condition": "progress_switching",
+      "success_rate": 0.2,
+      "mean_final_distance": 2.5897058796497294,
+      "llm_calls": 32,
+      "timeout_count": 22,
+      "gate_count": 7
+    },
+    {
+      "condition": "depth_switching",
+      "success_rate": 0.1,
+      "mean_final_distance": 3.229788169749066,
+      "llm_calls": 57,
+      "timeout_count": 39,
+      "gate_count": 8
+    }
+  ]
+}
