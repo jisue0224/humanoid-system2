@@ -226,9 +226,9 @@ def extract_actor_state_dict(checkpoint: Path) -> tuple[dict | None, dict]:
             if not hasattr(tensor, "shape"):
                 continue
             if name.startswith("actor."):
-                actor_items[name.removeprefix("actor.")] = tensor
+                actor_items[f"net.{name.removeprefix('actor.')}"] = tensor
             elif name.startswith("actor_net."):
-                actor_items[name.removeprefix("actor_net.")] = tensor
+                actor_items[f"net.{name.removeprefix('actor_net.')}"] = tensor
         if actor_items:
             metadata["actor_source_key"] = key
             metadata["actor_tensor_keys"] = list(actor_items.keys())[:20]

@@ -1,6 +1,6 @@
 # Step 2 Report
 
-Status: blocked before pretrained rollout.
+Status: pretrained rollout attempted; sim2sim does not work yet.
 
 Date: 2026-06-20
 
@@ -29,14 +29,40 @@ Available:
 - MuJoCo Menagerie H1 MJCF
 - EGL rendering
 
-Unavailable in the current fresh workspace:
+Initially unavailable in the fresh workspace:
 
 - `isaaclab`
 - `isaaclab_tasks`
 - `rsl_rl`
 - Isaac Lab pretrained H1 checkpoint cache
 
-Filesystem search found no local `checkpoint.pt` or H1 pretrained `.pt` file under `/workspace` or `/root`.
+Filesystem search initially found no local `checkpoint.pt` or H1 pretrained `.pt` file under `/workspace` or `/root`.
+
+I then reinstalled Isaac Lab v2.1.0 with the project script and fetched the published checkpoint through Isaac Lab:
+
+```bash
+bash scripts/install_isaaclab.sh
+
+source env_isaaclab/bin/activate
+OMNI_KIT_ACCEPT_EULA=YES PYTHONUNBUFFERED=1 TERM=xterm \
+  external/IsaacLab/isaaclab.sh -p scripts/check_h1_pretrained.py \
+  --headless --device cuda:0
+```
+
+The first `check_h1_pretrained.py` run failed because the fresh container was missing graphics support libraries such as `libSM.so.6` and `libXt.so.6`. Installing the same minimal OS libraries used in the previous Isaac session fixed that import-level issue:
+
+```bash
+apt-get install -y \
+  libsm6 libxt6 libxrender1 libxext6 libx11-6 libxcb1 libxau6 libxdmcp6 \
+  libvulkan1 vulkan-tools mesa-vulkan-drivers
+```
+
+Isaac Sim still reports no Vulkan GPU, as expected for this VESSL container, but checkpoint retrieval succeeded:
+
+```text
+Fetching pre-trained checkpoint : http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/4.5/Isaac/IsaacLab/PretrainedCheckpoints/rsl_rl/Isaac-Velocity-Flat-H1-v0/checkpoint.pt
+[PRETRAINED] available path=/workspace/humanoid-system2/.pretrained_checkpoints/rsl_rl/Isaac-Velocity-Flat-H1-v0/checkpoint.pt
+```
 
 ## Isaac Lab Interface Reconstructed
 
@@ -96,29 +122,48 @@ Then applies MuJoCo torques with a PD wrapper using Isaac Lab H1 gains.
 
 ## Checkpoint Status
 
-Expected local path:
+Recovered Isaac Lab cache path:
+
+```text
+.pretrained_checkpoints/rsl_rl/Isaac-Velocity-Flat-H1-v0/checkpoint.pt
+```
+
+Copied local MuJoCo-side path:
 
 ```text
 mujoco_sim2sim/checkpoints/rsl_rl_Isaac-Velocity-Flat-H1-v0_checkpoint.pt
 ```
 
-Result:
+The checkpoint is intentionally ignored by git through:
 
 ```text
-checkpoint not found
+mujoco_sim2sim/checkpoints/
 ```
 
-I also tried the SourceForge mirror path suggested by search results:
+File size:
 
 ```text
-https://sourceforge.net/projects/nvidia-isaac-lab.mirror/files/training-checkpoints-v2.3/rsl_rl_Isaac-Velocity-Flat-H1-v0_checkpoint.pt/download
+1.1M
 ```
 
-but it returned `404` from this environment. The release RSS listing exposes source-code archives but not that checkpoint file path.
+Checkpoint structure:
 
-Therefore the actual pretrained policy inference could not be run yet.
+```text
+top-level keys: model_state_dict, optimizer_state_dict, iter, infos
+actor.0.weight: [128, 69]
+actor.0.bias:   [128]
+actor.2.weight: [128, 128]
+actor.2.bias:   [128]
+actor.4.weight: [128, 128]
+actor.4.bias:   [128]
+actor.6.weight: [19, 128]
+actor.6.bias:   [19]
+std:            [19]
+```
 
-## MuJoCo Wrapper Smoke Test
+The MuJoCo wrapper maps `actor.*` checkpoint keys to the local actor MLP's `net.*` keys.
+
+## MuJoCo Wrapper Smoke Test Without Checkpoint
 
 Script:
 
@@ -161,9 +206,80 @@ collapsed = true
 
 The identical forward/yaw result is expected because no policy was loaded. The command is only an observation input; zero-action fallback ignores it.
 
+## Pretrained Policy Rollout Attempt
+
+After recovering the checkpoint, I ran the same wrapper with the actual actor weights.
+
+Forward command:
+
+```bash
+source env_isaaclab/bin/activate
+MUJOCO_GL=egl python mujoco_sim2sim/step2_policy_transfer_attempt.py \
+  --output_dir mujoco_sim2sim/artifacts/step2_policy_forward \
+  --seconds 2.0 --vx 1.0 --vy 0.0 --yaw 0.0
+```
+
+Result:
+
+```text
+used_policy = true
+delta_x = +0.950 m
+delta_y = +1.270 m
+final_yaw = +0.058 rad
+collapsed = true
+```
+
+Collapse timing:
+
+```text
+base_z < 0.9 m at 1.102 s
+base_z < 0.6 m at 1.382 s
+base_z < 0.3 m at 1.522 s
+max_action_norm = 5.544
+max_torque_norm = 364.418
+```
+
+Yaw command:
+
+```bash
+source env_isaaclab/bin/activate
+MUJOCO_GL=egl python mujoco_sim2sim/step2_policy_transfer_attempt.py \
+  --output_dir mujoco_sim2sim/artifacts/step2_policy_yaw \
+  --seconds 2.0 --vx 0.0 --vy 0.0 --yaw 0.5
+```
+
+Result:
+
+```text
+used_policy = true
+delta_x = -0.563 m
+delta_y = +0.367 m
+final_yaw = +1.425 rad
+collapsed = true
+```
+
+Collapse timing:
+
+```text
+base_z < 0.9 m at 1.222 s
+base_z < 0.6 m at 1.522 s
+base_z < 0.3 m at 1.702 s
+max_action_norm = 6.176
+max_torque_norm = 335.476
+```
+
+Comparison with Isaac Lab baseline:
+
+| Case | Isaac Lab expected | MuJoCo attempt |
+|---|---:|---:|
+| forward `vx=1.0` | `delta_x=+1.624m`, stable | `delta_x=+0.950m`, `delta_y=+1.270m`, collapsed |
+| yaw `yaw=0.5` | heading `+1.041rad`, stable | heading `+1.425rad`, collapsed |
+
+The policy is not transferring correctly yet.
+
 ## Interpretation
 
-Step 2 is blocked at the checkpoint/inference stage, not at MuJoCo model loading.
+Step 2 is no longer blocked by checkpoint availability. The pretrained actor loads and runs, but the sim2sim transfer fails dynamically.
 
 What was validated:
 
@@ -171,43 +287,30 @@ What was validated:
 - The MuJoCo side can expose a 19D action interface matching Isaac Lab's joint-position target semantics.
 - The default H1 joint order and action dimension can be mapped.
 - A PD wrapper with Isaac Lab gains can be applied to MuJoCo torque motors.
+- The Isaac Lab published RSL-RL H1 checkpoint can be fetched in this environment after reinstalling Isaac Lab.
+- The actor MLP weights load into the MuJoCo wrapper.
 
 What failed or remains unvalidated:
 
-- The pretrained RSL-RL checkpoint is not available in this fresh workspace.
-- Without checkpoint weights, `vx=1.0` and `yaw=0.5` policy rollouts cannot be compared to Isaac Lab.
-- Zero-action PD hold does not stabilize the Menagerie H1. The robot collapses, so the learned policy or a stronger balancing controller is required.
+- `vx=1.0` and `yaw=0.5` do not reproduce the Isaac Lab baseline.
+- The H1 collapses in both policy rollouts within about 1.4-1.5 seconds.
+- Zero-action PD hold also does not stabilize the Menagerie H1.
+- The remaining mismatch is likely in one or more of:
+  - MuJoCo Menagerie H1 inertial/contact/actuator parameters differ from Isaac Lab `H1_MINIMAL_CFG`.
+  - MuJoCo actuator motors are torque motors while Isaac Lab uses implicit actuators.
+  - Observation frame/sign conventions may still differ.
+  - MuJoCo joint order/name semantics may look aligned but not be exactly the same as Isaac Lab's resolved joint order.
+  - Contact/friction/foot geometry differs enough to destabilize the learned gait.
 
-## Next Required Input
+## Next Work
 
-To complete Step 2 properly, provide or recover one of:
+Do not proceed as if sim2sim is solved. The next step should be a focused mismatch audit:
 
-1. The cached checkpoint from the previous Isaac Lab session:
-
-```text
-.pretrained_checkpoints/rsl_rl/Isaac-Velocity-Flat-H1-v0/checkpoint.pt
-```
-
-2. A direct downloadable URL for:
-
-```text
-rsl_rl_Isaac-Velocity-Flat-H1-v0_checkpoint.pt
-```
-
-3. A working Isaac Lab environment so `get_published_pretrained_checkpoint("rsl_rl", "Isaac-Velocity-Flat-H1-v0")` can download/cache it again.
-
-Once checkpoint weights are available, rerun:
-
-```bash
-MUJOCO_GL=egl python mujoco_sim2sim/step2_policy_transfer_attempt.py \
-  --checkpoint mujoco_sim2sim/checkpoints/rsl_rl_Isaac-Velocity-Flat-H1-v0_checkpoint.pt \
-  --seconds 2.0 --vx 1.0 --vy 0.0 --yaw 0.0
-
-MUJOCO_GL=egl python mujoco_sim2sim/step2_policy_transfer_attempt.py \
-  --checkpoint mujoco_sim2sim/checkpoints/rsl_rl_Isaac-Velocity-Flat-H1-v0_checkpoint.pt \
-  --output_dir mujoco_sim2sim/artifacts/step2_yaw \
-  --seconds 2.0 --vx 0.0 --vy 0.0 --yaw 0.5
-```
+1. Extract Isaac Lab's resolved joint order, default joint positions, action manager scale/offset, and actuator gains from a live Isaac env.
+2. Compare them numerically against the MuJoCo wrapper.
+3. Try a stronger explicit PD hold or actuator model closer to Isaac implicit actuators.
+4. Compare base frame velocity and projected gravity signs using a known pose/velocity.
+5. If still unstable, use MuJoCo for rendering but plan to train or fine-tune a MuJoCo H1 locomotion policy instead of expecting direct checkpoint transfer.
 
 ## Artifacts
 
@@ -216,3 +319,7 @@ MUJOCO_GL=egl python mujoco_sim2sim/step2_policy_transfer_attempt.py \
 - Forward fallback final render: `mujoco_sim2sim/artifacts/step2/step2_final.png`
 - Yaw fallback summary: `mujoco_sim2sim/artifacts/step2_yaw/step2_policy_transfer_attempt.json`
 - Yaw fallback final render: `mujoco_sim2sim/artifacts/step2_yaw/step2_final.png`
+- Forward policy summary: `mujoco_sim2sim/artifacts/step2_policy_forward/step2_policy_transfer_attempt.json`
+- Forward policy final render: `mujoco_sim2sim/artifacts/step2_policy_forward/step2_final.png`
+- Yaw policy summary: `mujoco_sim2sim/artifacts/step2_policy_yaw/step2_policy_transfer_attempt.json`
+- Yaw policy final render: `mujoco_sim2sim/artifacts/step2_policy_yaw/step2_final.png`
