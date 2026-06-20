@@ -68,9 +68,18 @@ If the objective is navigation success, keep the depth-based trigger.
 If the objective is cost or controller efficiency, progress remains lighter but
 weaker.
 
+For visualization, the representative success case is `seed 6001`. In that
+case, `depth_switching` fired on step `17` and reached the goal, while
+`progress_switching` on the same seed did not succeed and did not call until
+step `109`.
+
 ## Artifacts
 
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_comparison.png`
+- `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_repcompare/progress_vs_depth_seed6001.png`
+- `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative_success/representative_success_depth_episode.png`
+- `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative_success/ego_rgb_step17.png`
+- `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative_success/ego_depth_step17.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative/representative_depth_episode.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative/ego_rgb_step16.png`
 - `mujoco_ant_hierarchical/artifacts/step3_4_final_40eps_representative/ego_depth_step16.png`
