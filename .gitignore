@@ -1,6 +1,7 @@
 .venv/
 env_isaaclab/
 __pycache__/
+.ipynb_checkpoints/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
@@ -9,6 +10,7 @@ __pycache__/
 # Isaac/Omniverse caches and generated artifacts
 _isaac_sim/
 external/
+mujoco_sim2sim/vendor/
 kit/
 ov/
 *.usd
