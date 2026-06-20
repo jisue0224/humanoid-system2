@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
+from dataclasses import dataclass
 
 import gymnasium as gym
 import numpy as np
@@ -13,6 +13,15 @@ from stable_baselines3 import SAC
 
 DEFAULT_REPO_ID = "jren123/sac-ant-v4"
 DEFAULT_FILENAME = "SAC-Ant-v4.zip"
+
+
+@dataclass(frozen=True)
+class DirectionalControllerConfig:
+    """No-learning high-level parameters for the frozen Ant policy."""
+
+    success_radius: float = 0.75
+    slow_radius: float = 0.0
+    min_action_scale: float = 1.0
 
 
 def yaw_quat(theta: float) -> np.ndarray:
@@ -56,20 +65,47 @@ def target_aligned_observation(obs: np.ndarray, target_heading: float) -> np.nda
     return transformed
 
 
+def distance_action_scale(distance: float, config: DirectionalControllerConfig) -> float:
+    """Scale frozen policy actions down near the target to reduce overshoot."""
+
+    if config.slow_radius <= config.success_radius:
+        return 1.0
+    alpha = (distance - config.success_radius) / (config.slow_radius - config.success_radius)
+    alpha = max(0.0, min(1.0, alpha))
+    return config.min_action_scale + (1.0 - config.min_action_scale) * alpha
+
+
 class DirectionalAntController:
     """High-level target heading wrapper around the frozen pretrained SAC policy."""
 
-    def __init__(self, repo_id: str = DEFAULT_REPO_ID, filename: str = DEFAULT_FILENAME):
+    def __init__(
+        self,
+        repo_id: str = DEFAULT_REPO_ID,
+        filename: str = DEFAULT_FILENAME,
+        config: DirectionalControllerConfig | None = None,
+    ):
         checkpoint = load_from_hub(repo_id=repo_id, filename=filename)
         self.model = SAC.load(checkpoint)
         self.checkpoint = checkpoint
+        self.config = config or DirectionalControllerConfig()
 
     def predict(self, obs: np.ndarray, current_xy: np.ndarray, target_xy: np.ndarray) -> tuple[np.ndarray, float]:
+        action, target_heading, _ = self.predict_with_info(obs, current_xy, target_xy)
+        return action, target_heading
+
+    def predict_with_info(
+        self, obs: np.ndarray, current_xy: np.ndarray, target_xy: np.ndarray
+    ) -> tuple[np.ndarray, float, dict]:
         delta = target_xy - current_xy
+        distance = float(np.linalg.norm(delta))
         target_heading = math.atan2(float(delta[1]), float(delta[0]))
         aligned_obs = target_aligned_observation(obs, target_heading)
         action, _ = self.model.predict(aligned_obs, deterministic=True)
-        return action, target_heading
+        action_scale = distance_action_scale(distance, self.config)
+        return action * action_scale, target_heading, {
+            "distance": distance,
+            "action_scale": action_scale,
+        }
 
 
 def make_env(*, render_mode: str | None = None):
