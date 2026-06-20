@@ -1,0 +1,115 @@
+{
+  "ant_v4_observation": "qpos[2:] + qvel[:], with world x/y position excluded",
+  "obs_transform_indices": {
+    "root_quaternion_wxyz": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "root_xy_velocity": [
+      13,
+      14
+    ]
+  },
+  "decision": "A",
+  "decision_reason": "The pretrained forward policy can be redirected by expressing root orientation and xy velocity in a target-aligned frame. No joint-level locomotion retraining is needed.",
+  "results": [
+    {
+      "goal": [
+        0.0,
+        5.0
+      ],
+      "use_transform": false,
+      "steps": 100,
+      "terminated": false,
+      "truncated": false,
+      "start_xy": [
+        0.027392337464290872,
+        -0.04604265724722594
+      ],
+      "end_xy": [
+        22.354494392450412,
+        1.8778675353597385
+      ],
+      "delta_xy": [
+        22.32710205498612,
+        1.9239101926069644
+      ],
+      "distance_to_goal": 22.571467180244568,
+      "mean_target_heading": 2.5389636651932013
+    },
+    {
+      "goal": [
+        0.0,
+        5.0
+      ],
+      "use_transform": true,
+      "steps": 100,
+      "terminated": false,
+      "truncated": false,
+      "start_xy": [
+        0.027392337464290872,
+        -0.04604265724722594
+      ],
+      "end_xy": [
+        2.451920785411644,
+        5.877894504866535
+      ],
+      "delta_xy": [
+        2.424528447947353,
+        5.923937162113761
+      ],
+      "distance_to_goal": 2.604345272733343,
+      "mean_target_heading": -0.3693818389171801
+    },
+    {
+      "goal": [
+        5.0,
+        0.0
+      ],
+      "use_transform": false,
+      "steps": 100,
+      "terminated": false,
+      "truncated": false,
+      "start_xy": [
+        0.027392337464290872,
+        -0.04604265724722594
+      ],
+      "end_xy": [
+        22.354494392450412,
+        1.8778675353597385
+      ],
+      "delta_xy": [
+        22.32710205498612,
+        1.9239101926069644
+      ],
+      "distance_to_goal": 17.455797377889986,
+      "mean_target_heading": -1.8601398796669104
+    },
+    {
+      "goal": [
+        5.0,
+        0.0
+      ],
+      "use_transform": true,
+      "steps": 100,
+      "terminated": false,
+      "truncated": false,
+      "start_xy": [
+        0.027392337464290872,
+        -0.04604265724722594
+      ],
+      "end_xy": [
+        6.355896715729622,
+        -0.3925961023095154
+      ],
+      "delta_xy": [
+        6.328504378265331,
+        -0.34655344506228947
+      ],
+      "distance_to_goal": 1.4115904516803017,
+      "mean_target_heading": -0.08429920910113367
+    }
+  ]
+}
