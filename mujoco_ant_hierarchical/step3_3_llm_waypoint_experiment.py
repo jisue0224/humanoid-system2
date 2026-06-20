@@ -18,6 +18,7 @@ import numpy as np
 from dotenv import load_dotenv
 from openai import OpenAI
 from PIL import Image
+from matplotlib import colors
 
 from ant_directional_controller import DirectionalAntController, DirectionalControllerConfig
 from ant_scene import DEFAULT_GOAL_XY, DEFAULT_OBSTACLE_POS, DEFAULT_OBSTACLE_SIZE, make_scene_env
@@ -29,6 +30,10 @@ SYSTEM_PROMPT = (
     "Choose one intermediate waypoint that helps the robot avoid the obstacle. "
     "The low-level controller can walk toward any waypoint by rotating its observation frame."
 )
+
+DEPTH_ROI_SPECS = {
+    "center_20x30_mean": {"x0": 0.40, "x1": 0.60, "y0": 0.35, "y1": 0.65, "stat": "mean"},
+}
 
 
 def encode_image(path: Path) -> str:
@@ -42,6 +47,33 @@ def capture_frame(env, camera_name: str, path: Path, *, width: int = 640, height
     frame = renderer.render()
     renderer.close()
     Image.fromarray(frame).save(path)
+
+
+def center_crop(array: np.ndarray, *, width_frac: float, height_frac: float) -> np.ndarray:
+    height, width = array.shape[:2]
+    crop_w = int(width * width_frac)
+    crop_h = int(height * height_frac)
+    x0 = (width - crop_w) // 2
+    y0 = (height - crop_h) // 2
+    return array[y0 : y0 + crop_h, x0 : x0 + crop_w]
+
+
+def depth_occupancy(depth: np.ndarray, *, depth_threshold: float, roi_name: str) -> tuple[float, float]:
+    spec = DEPTH_ROI_SPECS[roi_name]
+    crop = center_crop(depth, width_frac=spec["x1"] - spec["x0"], height_frac=spec["y1"] - spec["y0"])
+    finite = crop[np.isfinite(crop)]
+    if finite.size == 0:
+        return 0.0, float("nan")
+    clipped = np.clip(finite, 0.0, depth_threshold * 4.0)
+    mean_depth = float(clipped.mean())
+    uncertainty = max(0.0, (depth_threshold - mean_depth) / depth_threshold)
+    return float(uncertainty), mean_depth
+
+
+def render_depth_frame(renderer: mujoco.Renderer, env, *, camera_name: str = "ego") -> np.ndarray:
+    renderer.enable_depth_rendering()
+    renderer.update_scene(env.unwrapped.data, camera=camera_name)
+    return np.asarray(renderer.render(), dtype=np.float32)
 
 
 def parse_json(text: str) -> dict:
@@ -151,6 +183,11 @@ def run_episode(
     uncertainty_threshold: float,
     uncertainty_window: int,
     min_progress: float,
+    uncertainty_mode: str,
+    depth_threshold: float,
+    depth_roi: str,
+    width: int,
+    height: int,
     llm_cooldown: int,
     uncertainty_warmup_steps: int,
     waypoint_timeout_steps: int,
@@ -161,6 +198,9 @@ def run_episode(
     env = make_scene_env(with_obstacle=True)
     obs, _ = env.reset(seed=seed)
     goal_xy = np.array(DEFAULT_GOAL_XY, dtype=np.float64)
+    depth_renderer = None
+    if uncertainty_mode == "depth":
+        depth_renderer = mujoco.Renderer(env.unwrapped.model, height=height, width=width)
     active_waypoint: np.ndarray | None = None
     active_waypoint_start: int | None = None
     active_waypoint_side: int | None = None
@@ -169,6 +209,7 @@ def run_episode(
     recent_waypoints: list[np.ndarray] = []
     trajectory = []
     distances = []
+    uncertainty_trace = []
     llm_calls = []
     waypoint_events = []
     success = False
@@ -226,7 +267,15 @@ def run_episode(
                 active_waypoint_side = None
                 active_waypoint_gate_valid = True
 
-        uncertainty = progress_uncertainty(distances, window=uncertainty_window, min_progress=min_progress)[-1]
+        if uncertainty_mode == "progress":
+            uncertainty = progress_uncertainty(distances, window=uncertainty_window, min_progress=min_progress)[-1]
+        elif uncertainty_mode == "depth":
+            assert depth_renderer is not None
+            depth = render_depth_frame(depth_renderer, env)
+            uncertainty, _ = depth_occupancy(depth, depth_threshold=depth_threshold, roi_name=depth_roi)
+        else:
+            raise ValueError(f"unsupported uncertainty_mode: {uncertainty_mode}")
+        uncertainty_trace.append(float(uncertainty))
         should_call = False
         if condition == "always_llm":
             should_call = active_waypoint is None and step >= next_llm_allowed
@@ -285,7 +334,8 @@ def run_episode(
             break
 
     env.close()
-    uncertainty_trace = progress_uncertainty(distances, window=uncertainty_window, min_progress=min_progress)
+    if depth_renderer is not None:
+        depth_renderer.close()
     return {
         "episode": episode,
         "condition": condition,
@@ -302,6 +352,9 @@ def run_episode(
         "llm_calls": llm_calls,
         "llm_call_count": len(llm_calls),
         "waypoint_events": waypoint_events,
+        "uncertainty_mode": uncertainty_mode,
+        "depth_threshold": depth_threshold,
+        "depth_roi": depth_roi,
     }
 
 
@@ -316,6 +369,19 @@ def plot_condition(results: list[dict], path: Path, title: str) -> None:
     for result in results:
         trajectory = np.array(result["trajectory"], dtype=np.float64)
         plt.plot(trajectory[:, 0], trajectory[:, 1], linewidth=1.3, alpha=0.75)
+        call_xy = [call["current_xy"] for call in result["llm_calls"]]
+        if call_xy:
+            call_xy = np.array(call_xy, dtype=np.float64)
+            call_steps = np.array([call["step"] for call in result["llm_calls"]], dtype=np.float64)
+            plt.scatter(
+                call_xy[:, 0],
+                call_xy[:, 1],
+                c=call_steps,
+                cmap="viridis",
+                s=28,
+                alpha=0.85,
+                edgecolors="none",
+            )
         for call in result["llm_calls"]:
             waypoint = call.get("waypoint")
             if waypoint is not None:
@@ -328,6 +394,14 @@ def plot_condition(results: list[dict], path: Path, title: str) -> None:
     plt.grid(True, alpha=0.3)
     plt.title(title)
     plt.legend(loc="best")
+    if any(result["llm_calls"] for result in results):
+        call_steps = [call["step"] for result in results for call in result["llm_calls"]]
+        sm = plt.cm.ScalarMappable(
+            norm=colors.Normalize(vmin=min(call_steps), vmax=max(call_steps)),
+            cmap="viridis",
+        )
+        sm.set_array([])
+        plt.colorbar(sm, ax=plt.gca(), label="LLM call step")
     plt.tight_layout()
     plt.savefig(path, dpi=160)
     plt.close()
@@ -350,12 +424,17 @@ def main() -> None:
     parser.add_argument("--uncertainty_threshold", type=float, default=0.02)
     parser.add_argument("--uncertainty_window", type=int, default=5)
     parser.add_argument("--min_progress", type=float, default=0.02)
+    parser.add_argument("--uncertainty_mode", choices=("progress", "depth"), default="progress")
+    parser.add_argument("--depth_threshold", type=float, default=3.0)
+    parser.add_argument("--depth_roi", choices=tuple(DEPTH_ROI_SPECS.keys()), default="center_20x30_mean")
     parser.add_argument("--llm_cooldown", type=int, default=30)
     parser.add_argument("--uncertainty_warmup_steps", type=int, default=15)
     parser.add_argument("--waypoint_timeout_steps", type=int, default=50)
     parser.add_argument("--goal_near_suppression_radius", type=float, default=1.0)
     parser.add_argument("--model", default="gpt-5.4")
     parser.add_argument("--include_ego", action="store_true")
+    parser.add_argument("--width", type=int, default=160)
+    parser.add_argument("--height", type=int, default=120)
     parser.add_argument("--seed", type=int, default=3000)
     parser.add_argument("--output_dir", type=Path, default=Path("mujoco_ant_hierarchical/artifacts/step3_3_llm"))
     args = parser.parse_args()
@@ -402,6 +481,11 @@ def main() -> None:
             uncertainty_threshold=args.uncertainty_threshold,
             uncertainty_window=args.uncertainty_window,
             min_progress=args.min_progress,
+            uncertainty_mode=args.uncertainty_mode,
+            depth_threshold=args.depth_threshold,
+            depth_roi=args.depth_roi,
+            width=args.width,
+            height=args.height,
             llm_cooldown=args.llm_cooldown,
             uncertainty_warmup_steps=args.uncertainty_warmup_steps,
             waypoint_timeout_steps=args.waypoint_timeout_steps,
@@ -436,6 +520,9 @@ def main() -> None:
             "slow_radius": args.waypoint_slow_radius,
             "min_action_scale": args.waypoint_min_action_scale,
         },
+        "uncertainty_mode": args.uncertainty_mode,
+        "depth_threshold": args.depth_threshold,
+        "depth_roi": args.depth_roi,
         "waypoint_timeout_steps": args.waypoint_timeout_steps,
         "uncertainty_warmup_steps": args.uncertainty_warmup_steps,
         "results": results,
